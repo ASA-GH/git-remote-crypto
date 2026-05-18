@@ -1,0 +1,8 @@
+.vscode
+.idea
+node_modules/
+dist/
+.git-crypt-key
+npm-debug.log*
+.tmp/
+.DS_Store
