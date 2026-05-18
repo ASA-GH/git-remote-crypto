@@ -4,7 +4,13 @@ export {
   decryptWithMarker,
 } from "./crypto.js";
 
-export type { SecureBinaryData } from "./types.js";
+export { createCryptoPlugin } from "./plugin.js";
+
+export type {
+  SecureBinaryData,
+  CryptoPluginOptions,
+  GitObject
+} from "./types.js";
 
 export {
   createSecureBuffer,
