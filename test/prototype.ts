@@ -4,6 +4,8 @@ import {
   importMasterKey,
   encryptDeterministic,
   decryptWithMarker,
+  encodeSecureText,
+  decodeSecureText,
 } from "../src/index.js";
 
 /**
@@ -20,14 +22,14 @@ async function main() {
   }
 
   const rawKeyFile = fs.readFileSync(defaultKeyPath);
-  const rawKeyArray = new Uint8Array(rawKeyFile.buffer, rawKeyFile.byteOffset, rawKeyFile.byteLength) as Uint8Array<ArrayBuffer>;
+  const rawKeyArray = new Uint8Array(rawKeyFile.buffer, rawKeyFile.byteOffset, rawKeyFile.byteLength);
 
   const masterKey = await importMasterKey(rawKeyArray);
   console.log("[OK] Team key successfully loaded from .git-crypt-key");
 
   const originalText = "Secret source code of our team that will be pushed to GitHub encrypted!";
   console.log("[OK] Original text:", originalText);
-  const plainData = new TextEncoder().encode(originalText) as Uint8Array<ArrayBuffer>;
+  const plainData = encodeSecureText(originalText);
 
   const encryptedData = await encryptDeterministic(plainData, masterKey);
   const marker = encryptedData.slice(0, 4);
@@ -44,8 +46,8 @@ async function main() {
   }
 
   try {
-    const decryptedData = await decryptWithMarker(encryptedData as Uint8Array<ArrayBuffer>, masterKey);
-    const decryptedText = new TextDecoder().decode(decryptedData);
+    const decryptedData = await decryptWithMarker(encryptedData, masterKey);
+    const decryptedText = decodeSecureText(decryptedData);
 
     console.log("[OK] Decrypted text:", decryptedText);
 
