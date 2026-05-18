@@ -1,4 +1,5 @@
 import { describe, test, expect } from "vitest";
+import { generateTestKey } from "./helpers.js";
 import {
   importMasterKey,
   encryptDeterministic,
@@ -6,19 +7,13 @@ import {
   decodeSecureText,
   encodeSecureText,
   createSecureBuffer,
-  SecureBinaryData
 } from "../src/index.js";
 
-function generateRawKey(): SecureBinaryData {
-  const view = createSecureBuffer(32);
-  crypto.getRandomValues(view);
-  return view;
-}
 
 describe("git-remote-crypto tests (Vitest)", () => {
 
   test("Successful encryption and decryption cycle", async () => {
-    const rawKey = generateRawKey();
+    const rawKey = generateTestKey();
     const masterKey = await importMasterKey(rawKey);
 
     const originalText = "Hello, Git-remote-crypto securely stored data!";
@@ -38,7 +33,7 @@ describe("git-remote-crypto tests (Vitest)", () => {
   });
 
   test("Determinism: identical data yields identical ciphertext", async () => {
-    const rawKey = generateRawKey();
+    const rawKey = generateTestKey();
     const masterKey = await importMasterKey(rawKey);
     const plainData = encodeSecureText("Deterministic content stability test");
 
@@ -49,7 +44,7 @@ describe("git-remote-crypto tests (Vitest)", () => {
   });
 
   test("Different data on the same key yields different ciphertext", async () => {
-    const rawKey = generateRawKey();
+    const rawKey = generateTestKey();
     const masterKey = await importMasterKey(rawKey);
 
     const data1 = encodeSecureText("Message number one");
@@ -62,7 +57,7 @@ describe("git-remote-crypto tests (Vitest)", () => {
   });
 
   test("Error when attempting to decrypt data with an invalid marker", async () => {
-    const rawKey = generateRawKey();
+    const rawKey = generateTestKey();
     const masterKey = await importMasterKey(rawKey);
 
     const brokenData = createSecureBuffer(8);
@@ -74,8 +69,8 @@ describe("git-remote-crypto tests (Vitest)", () => {
   });
 
   test("Decryption error when using a different master key", async () => {
-    const rawKey1 = generateRawKey();
-    const rawKey2 = generateRawKey();
+    const rawKey1 = generateTestKey();
+    const rawKey2 = generateTestKey();
 
     const masterKey1 = await importMasterKey(rawKey1);
     const masterKey2 = await importMasterKey(rawKey2);
