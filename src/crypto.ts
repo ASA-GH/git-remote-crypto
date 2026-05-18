@@ -1,4 +1,5 @@
-import { SecureBinaryData } from "./index.js";
+import { SecureBinaryData } from "./types.js";
+import { createSecureBuffer, encodeSecureText } from "./utils.js";
 
 /**
  * Imports raw bytes of the shared team key as a base HKDF secret.
@@ -23,13 +24,13 @@ export async function importMasterKey(
 export async function encryptDeterministic(
   plain: SecureBinaryData,
   masterKey: CryptoKey
-): Promise<Uint8Array> {
+): Promise<SecureBinaryData> {
   const hmacKey = await crypto.subtle.deriveKey(
     {
       name: "HKDF",
       hash: "SHA-256",
       salt: new Uint8Array(0),
-      info: new TextEncoder().encode("git-remote-crypto:hmac")
+      info: encodeSecureText("git-remote-crypto:hmac")
     },
     masterKey,
     { name: "HMAC", hash: "SHA-256", length: 256 },
@@ -42,7 +43,7 @@ export async function encryptDeterministic(
       name: "HKDF",
       hash: "SHA-256",
       salt: new Uint8Array(0),
-      info: new TextEncoder().encode("git-remote-crypto:aes")
+      info: encodeSecureText("git-remote-crypto:aes")
     },
     masterKey,
     { name: "AES-GCM", length: 256 },
@@ -61,7 +62,8 @@ export async function encryptDeterministic(
 
   const ciphertext = new Uint8Array(encrypted);
   const marker = new Uint8Array([0x45, 0x4E, 0x43, 0x01]);
-  const result = new Uint8Array(marker.length + iv.length + ciphertext.length);
+
+  const result = createSecureBuffer(marker.length + iv.length + ciphertext.length);
 
   result.set(marker);
   result.set(iv, marker.length);
@@ -77,7 +79,7 @@ export async function encryptDeterministic(
 export async function decryptWithMarker(
   encryptedData: SecureBinaryData,
   masterKey: CryptoKey
-): Promise<Uint8Array> {
+): Promise<SecureBinaryData> {
   if (
     encryptedData[0] !== 0x45 ||
     encryptedData[1] !== 0x4E ||
@@ -87,15 +89,15 @@ export async function decryptWithMarker(
     throw new Error("[ERROR] Data is not encrypted with git-remote-crypto");
   }
 
-  const iv = encryptedData.slice(4, 16);
-  const ciphertext = encryptedData.slice(16);
+  const iv = encryptedData.subarray(4, 16) as SecureBinaryData;
+  const ciphertext = encryptedData.subarray(16) as SecureBinaryData;
 
   const aesKey = await crypto.subtle.deriveKey(
     {
       name: "HKDF",
       hash: "SHA-256",
       salt: new Uint8Array(0),
-      info: new TextEncoder().encode("git-remote-crypto:aes")
+      info: encodeSecureText("git-remote-crypto:aes")
     },
     masterKey,
     { name: "AES-GCM", length: 256 },
@@ -109,5 +111,8 @@ export async function decryptWithMarker(
     ciphertext
   );
 
-  return new Uint8Array(decrypted);
+  const result = createSecureBuffer(decrypted.byteLength);
+  result.set(new Uint8Array(decrypted));
+
+  return result;
 }
