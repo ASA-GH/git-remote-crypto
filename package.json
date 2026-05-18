@@ -1,0 +1,45 @@
+{
+  "name": "git-remote-crypto",
+  "version": "1.0.0",
+  "description": "Encrypted Git remote helper for isomorphic-git using AES-256-GCM",
+  "keywords": [
+    "git",
+    "encryption",
+    "isomorphic-git",
+    "crypto",
+    "obsidian"
+  ],
+  "author": "ASA-GH",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=24.14.0"
+  },
+  "packageManager": "npm@11.9.0",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
+    "dev": "tsx test/prototype.ts",
+    "test": "vitest --exclude **/prototype.ts",
+    "test:run": "vitest run --exclude **/prototype.ts",
+    "prepublishOnly": "npm run build && npm run test:run"
+  },
+  "dependencies": {
+    "@isomorphic-git/lightning-fs": "^4.6.2",
+    "isomorphic-git": "^1.38.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.0",
+    "tsx": "^4.22.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
+  }
+}
