@@ -48,3 +48,21 @@ export function encodeSecureText(text: string): SecureBinaryData {
 export function decodeSecureText(buffer: SecureBinaryData): string {
   return decoder.decode(buffer);
 }
+
+/**
+ * Type validator and normalizer that ensures a Uint8Array uses a standard ArrayBuffer.
+ * If the underlying buffer is a SharedArrayBuffer, it forces a safe in-memory copy
+ * into a newly allocated standard ArrayBuffer to eliminate Web Crypto API validation errors.
+ *
+ * @param data - The raw Uint8Array buffer source to validate.
+ * @returns A safe, strictly typed SecureBinaryData instance backed by a standard ArrayBuffer.
+ */
+export function toSBD(data: Uint8Array): SecureBinaryData {
+  if (data.buffer instanceof SharedArrayBuffer) {
+    const cleanBuffer = new ArrayBuffer(data.byteLength);
+    const cleanView = new Uint8Array(cleanBuffer);
+    cleanView.set(data);
+    return cleanView as SecureBinaryData;
+  }
+  return data as SecureBinaryData;
+}
