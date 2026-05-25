@@ -33,8 +33,16 @@ The library exports `importMasterKey` to ingest secure binary inputs (like raw k
 ```typescript
 import { importMasterKey } from "git-remote-crypto";
 
-// Initialize a 32-byte secure key view array
+/**
+ * Initialize a 32-byte secure key view array.
+ * @type {Uint8Array}
+ */
 const rawKeyBytes = new Uint8Array([/* 32 secret bytes */]);
+
+/**
+ * Hardened master cryptographic context key.
+ * @type {CryptoKey}
+ */
 const masterKey = await importMasterKey(rawKeyBytes);
 ```
 
@@ -49,31 +57,43 @@ import { createCryptoGitContext, RepoProfile } from "git-remote-crypto";
 import nodeFs from "fs";
 import nodeHttp from "isomorphic-git/http/node";
 
-// 1. Initialize an orchestration context targeting Node runtime modules
+/**
+ * Initialize an orchestration context targeting Node runtime modules.
+ * @type {CryptoGitManager<RepoProfile>}
+ */
 const gitManager = createCryptoGitContext<RepoProfile>(nodeHttp, nodeFs);
 
-// 2. Map a secure execution profile configuration
+/**
+ * Map a secure execution profile configuration.
+ */
 gitManager.addProfile({
   name: "secure-backend-repo",
   url: "https://github.com",
   dir: "./my-local-secure-repo",
   ref: "main",
   remote: "origin",
-  key: masterKey // The CryptoKey generated from importMasterKey
+  key: masterKey
 });
 
-// 3. Setup a clean local layout containing internal repository encryption locks
+/**
+ * Setup a clean local layout containing internal repository encryption locks.
+ */
 await gitManager.init("secure-backend-repo");
 
-// 4. Create transparently encrypted commits seamlessly
+/**
+ * Create transparently encrypted commits seamlessly.
+ * @type {string}
+ */
 const commitSha = await gitManager.commit(
-  "secure-backend-repo", 
+  "secure-backend-repo",
   "feat: commit transparently encrypted at rest",
   { name: "Developer", email: "dev@crypto.org" }
 );
 
-// 5. Sync securely to your remotes
-await gitManager.push("secure-backend-repo");
+/**
+ * Sync securely to remote server streams.
+ */
+await webGitManager.push("secure-backend-repo");
 ```
 
 ### Variant B: Modern Browsers (Vite / Webpack / React / Vue / Obsidian Plugins)
@@ -83,26 +103,38 @@ import { createCryptoGitContext, BrowserRepoProfile } from "git-remote-crypto";
 import browserHttp from "isomorphic-git/http/web";
 import LightningFS from "@isomorphic-git/lightning-fs";
 
-// Initialize your preferred client-side virtual filesystem block
+/**
+ * Initialize your preferred client-side virtual filesystem block.
+ * @type {LightningFS}
+ */
 const fsClient = new LightningFS("git-indexeddb-storage");
 
-// 1. Instantiates a web-focused interface instance
+/**
+ * Instantiates a web-focused interface instance.
+ * @type {CryptoGitManager<BrowserRepoProfile>}
+ */
 const webGitManager = createCryptoGitContext<BrowserRepoProfile>(browserHttp);
 
-// 2. Attach a browser repository target configuration mapping its unique FS instance
+/**
+ * Attach a browser repository target configuration mapping its unique FS instance.
+ */
 webGitManager.addProfile({
   name: "secure-browser-vault",
   url: "https://github.com",
   dir: "/vault-project",
   ref: "main",
   key: masterKey,
-  fs: fsClient // Pass the sandboxed client filesystem driver instance directly
+  fs: fsClient
 });
 
-// 3. Clone remote streams; payload encryption resolves transparently onto local writes
+/**
+ * Clone remote streams; payload encryption resolves transparently onto local writes.
+ */
 await webGitManager.clone("secure-browser-vault");
 
-// 4. Pull down encrypted changes down to clean decrypted local layouts
+/**
+ * Pull down encrypted changes down to clean decrypted local layouts.
+ */
 await webGitManager.pull("secure-browser-vault");
 ```
 
