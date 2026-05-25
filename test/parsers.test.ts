@@ -1,5 +1,4 @@
 import { describe, test, expect } from "vitest";
-import { TreeEntry } from "./types.js";
 import {
   parseBlob,
   serializeBlob,
@@ -10,6 +9,7 @@ import {
   encodeSecureText,
   decodeSecureText,
   createSecureBuffer,
+  TreeEntry
 } from "../src/core.js";
 
 describe("parsers unit tests", () => {
