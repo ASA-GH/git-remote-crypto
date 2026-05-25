@@ -7,11 +7,13 @@ import {
   decodeSecureText,
   encodeSecureText,
   createSecureBuffer,
-} from "../src/index.js";
+} from "../src/core.js";
 
+describe("crypto architecture tests", () => {
 
-describe("git-remote-crypto tests (Vitest)", () => {
-
+  /**
+   * Tests the full cryptographic pipeline from key import to successful cycle of data encryption and decryption.
+   */
   test("Successful encryption and decryption cycle", async () => {
     const rawKey = generateTestKey();
     const masterKey = await importMasterKey(rawKey);
@@ -32,6 +34,9 @@ describe("git-remote-crypto tests (Vitest)", () => {
     expect(decryptedText).toBe(originalText);
   });
 
+  /**
+   * Verifies that encryption is deterministic and produces identical ciphertext for identical inputs.
+   */
   test("Determinism: identical data yields identical ciphertext", async () => {
     const rawKey = generateTestKey();
     const masterKey = await importMasterKey(rawKey);
@@ -40,9 +45,12 @@ describe("git-remote-crypto tests (Vitest)", () => {
     const encrypted1 = await encryptDeterministic(plainData, masterKey);
     const encrypted2 = await encryptDeterministic(plainData, masterKey);
 
-    expect(encrypted1).toEqual(encrypted2);
+    expect(encrypted1).toStrictEqual(encrypted2);
   });
 
+  /**
+   * Assures that distinct input data results in completely different ciphertexts under the same key.
+   */
   test("Different data on the same key yields different ciphertext", async () => {
     const rawKey = generateTestKey();
     const masterKey = await importMasterKey(rawKey);
@@ -53,9 +61,12 @@ describe("git-remote-crypto tests (Vitest)", () => {
     const encrypted1 = await encryptDeterministic(data1, masterKey);
     const encrypted2 = await encryptDeterministic(data2, masterKey);
 
-    expect(encrypted1).not.toEqual(encrypted2);
+    expect(encrypted1).not.toStrictEqual(encrypted2);
   });
 
+  /**
+   * Validates that decryption fails immediately if the payload lacks a valid header marker.
+   */
   test("Error when attempting to decrypt data with an invalid marker", async () => {
     const rawKey = generateTestKey();
     const masterKey = await importMasterKey(rawKey);
@@ -68,6 +79,9 @@ describe("git-remote-crypto tests (Vitest)", () => {
       .toThrow("[ERROR] Data is not encrypted with git-remote-crypto");
   });
 
+  /**
+   * Confirms that attempting decryption with an incorrect master key triggers a Web Crypto rejection.
+   */
   test("Decryption error when using a different master key", async () => {
     const rawKey1 = generateTestKey();
     const rawKey2 = generateTestKey();
