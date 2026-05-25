@@ -33,6 +33,7 @@ export interface RepoProfile {
   dir: string;
   remote?: string;
   ref?: string;
+  fs?: any;
 }
 
 /**
