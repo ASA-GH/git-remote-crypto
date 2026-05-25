@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import git from "isomorphic-git";
 import { createCryptoGitContext } from "../src/index.js";
-import { createSecureBuffer, importMasterKey, RepoProfile, BrowserRepoProfile } from "../src/core.js";
+import { createSecureBuffer, importMasterKey, BrowserRepoProfile } from "../src/core.js";
 
 vi.mock("isomorphic-git", () => ({
   default: {

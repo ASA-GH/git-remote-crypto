@@ -8,20 +8,7 @@ import {
   importMasterKey
 } from "../src/core.js";
 
-vi.mock("./plugin.js", () => ({
-  createCryptoTransformer: () => ({
-    encryptObject: async (obj: any) => ({
-      type: obj.type,
-      object: encodeSecureText("ENCRYPTED_" + decodeSecureText(obj.object))
-    }),
-    decryptObject: async (obj: any) => ({
-      type: obj.type,
-      object: encodeSecureText(decodeSecureText(obj.object).replace("ENCRYPTED_", ""))
-    })
-  })
-}));
-
-describe("gitFsAdapter tests", () => {
+describe("gitFsAdapter integration tests", () => {
   let masterKey: CryptoKey;
   let mockFs: any;
   const gitObjectPath = ".git/objects/1f/23456789abcdef";
@@ -40,10 +27,8 @@ describe("gitFsAdapter tests", () => {
   }
 
   beforeEach(async () => {
-    vi.clearAllMocks();
-
     const rawKey = createSecureBuffer(32);
-    rawKey.set(new Array(32).fill(1));
+    rawKey.set(new Array(32).fill(5));
     masterKey = await importMasterKey(rawKey);
 
     mockFs = {
@@ -69,10 +54,14 @@ describe("gitFsAdapter tests", () => {
 
     const storedData = mockFs.files[gitObjectPath];
     const decompressed = pako.inflate(storedData);
-    const nullIdx = decompressed.indexOf(0);
-    const content = decodeSecureText(decompressed.slice(nullIdx + 1));
 
-    expect(content).toBe("ENCRYPTED_secret-source-code");
+    const nullIdx = decompressed.indexOf(0);
+    const encryptedContent = decompressed.slice(nullIdx + 1);
+
+    expect(encryptedContent[0]).toBe(0x45); // 'E'
+    expect(encryptedContent[1]).toBe(0x4E); // 'N'
+    expect(encryptedContent[2]).toBe(0x43); // 'C'
+    expect(encryptedContent[3]).toBe(0x01); // \x01
   });
 
   /**
@@ -80,7 +69,9 @@ describe("gitFsAdapter tests", () => {
    */
   test("Transparently decrypts loose Git objects on readFile", async () => {
     const cryptoFs = createGitCryptoFs(mockFs, masterKey);
-    mockFs.files[gitObjectPath] = createRawGitBlob("ENCRYPTED_my-git-data");
+    const originalBlob = createRawGitBlob("my-git-data");
+
+    await cryptoFs.writeFile(gitObjectPath, originalBlob);
 
     const result = await cryptoFs.readFile(gitObjectPath);
     const decompressed = pako.inflate(result);

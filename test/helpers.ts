@@ -1,4 +1,4 @@
-import { SecureBinaryData, createSecureBuffer } from "../src/index.js";
+import { SecureBinaryData, createSecureBuffer } from "../src/core.js";
 
 /**
  * Generates a cryptographically strong pseudo-random 32-byte master key for testing.
