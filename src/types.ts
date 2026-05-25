@@ -42,3 +42,17 @@ export interface BrowserRepoProfile extends Omit<RepoProfile, 'dir'> {
   fs: FsClient;
   dir: string;
 }
+
+/**
+ * Representation of an individual entry within a Git tree object.
+ */
+export interface TreeEntry {
+  /** The file mode, e.g., "100644" for files or "40000" for subdirectories. */
+  mode: string;
+  /** The type of the object pointed to by this entry. */
+  type: 'blob' | 'tree';
+  /** The raw 20-byte SHA-1 hash of the target object. */
+  hash: Uint8Array;
+  /** The filename or directory name. */
+  name: string;
+}
