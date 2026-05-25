@@ -144,7 +144,7 @@ describe("CryptoGitContext Facade Integration Tests", () => {
 
     await expect(manager.init("unknown-profile"))
       .rejects
-      .toThrow('Profile "unknown-profile" not found');
+      .toThrow("Profile \"unknown-profile\" not found");
   });
 
   /**
@@ -163,19 +163,19 @@ describe("CryptoGitContext Facade Integration Tests", () => {
     manager.addProfile(testProfile);
 
     await manager.add("secure-team-repo", "src/index.ts");
-    expect(git.add).toStrictEqual({
+    expect(git.add).toHaveBeenCalledWith({
       fs: expect.any(Object),
       dir: testProfile.dir,
       filepath: "src/index.ts"
     });
 
     await manager.add("secure-team-repo", ["package.json", "README.md"]);
-    expect(git.add).toStrictEqual({
+    expect(git.add).toHaveBeenCalledWith({
       fs: expect.any(Object),
       dir: testProfile.dir,
       filepath: "package.json"
     });
-    expect(git.add).toStrictEqual({
+    expect(git.add).toHaveBeenCalledWith({
       fs: expect.any(Object),
       dir: testProfile.dir,
       filepath: "README.md"
