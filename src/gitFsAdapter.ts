@@ -1,6 +1,6 @@
 import { createCryptoTransformer } from "./plugin.js";
 import { GitObject } from "./types.js";
-import { toSBD } from "./utils.js";
+import { decodeSecureText, encodeSecureText, toSBD } from "./utils.js";
 import pako from "pako";
 
 /**
@@ -18,30 +18,30 @@ export function createGitCryptoFs(baseFs: any, masterKey: CryptoKey) {
   /**
    * Internal helper to decompress, parse, transform, and re-compress a native Git loose object.
    */
-  async function processGitObject(buffer: Uint8Array, mode: 'encrypt' | 'decrypt'): Promise<Uint8Array> {
+  async function processGitObject(buffer: Uint8Array, mode: "encrypt" | "decrypt"): Promise<Uint8Array> {
     try {
       const decompressed = pako.inflate(buffer);
 
       const nullIdx = decompressed.indexOf(0);
       if (nullIdx === -1) return buffer;
 
-      const header = new TextDecoder().decode(decompressed.subarray(0, nullIdx));
-      const [type] = header.split(' ');
-      const content = decompressed.subarray(nullIdx + 1);
+      const header = decodeSecureText(decompressed.slice(0, nullIdx));
+      const [type] = header.split(" ");
+      const content = decompressed.slice(nullIdx + 1);
 
-      if (type !== 'blob' && type !== 'tree' && type !== 'commit') return buffer;
+      if (type !== "blob" && type !== "tree" && type !== "commit") return buffer;
 
       const gitObject: GitObject = {
         type: type as any,
         object: toSBD(content)
       };
 
-      const transformed = mode === 'encrypt'
+      const transformed = mode === "encrypt"
         ? await transformer.encryptObject(gitObject)
         : await transformer.decryptObject(gitObject);
 
       const newHeaderStr = `${transformed.type} ${transformed.object.length}\0`;
-      const newHeaderBuf = new TextEncoder().encode(newHeaderStr);
+      const newHeaderBuf = encodeSecureText(newHeaderStr);
 
       const resultBuf = new Uint8Array(newHeaderBuf.length + transformed.object.length);
       resultBuf.set(newHeaderBuf);
@@ -62,7 +62,7 @@ export function createGitCryptoFs(baseFs: any, masterKey: CryptoKey) {
     async writeFile(path: string, data: any, options: any) {
       let finalData = data;
       if (isGitObjectPath(path) && (data instanceof Uint8Array || Buffer.isBuffer(data))) {
-        finalData = await processGitObject(new Uint8Array(data), 'encrypt');
+        finalData = await processGitObject(new Uint8Array(data), "encrypt");
       }
       const fsClient = baseFs.promises ?? baseFs;
       return fsClient.writeFile(path, finalData, options);
@@ -73,7 +73,7 @@ export function createGitCryptoFs(baseFs: any, masterKey: CryptoKey) {
       const data = await fsClient.readFile(path, options);
 
       if (isGitObjectPath(path) && (data instanceof Uint8Array || Buffer.isBuffer(data))) {
-        return processGitObject(new Uint8Array(data), 'decrypt');
+        return processGitObject(new Uint8Array(data), "decrypt");
       }
       return data;
     }
