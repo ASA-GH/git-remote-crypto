@@ -21,7 +21,7 @@ By utilizing deterministic encryption schemas, identical input payloads consiste
 Install the package alongside its peer dependencies:
 
 ```bash
-npm install git-remote-crypto isomorphic-git pako
+npm install git-remote-crypto
 ```
 
 ---
