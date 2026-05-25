@@ -1,11 +1,11 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import pako from "pako";
 import {
-  importMasterKey,
-  encodeSecureText,
-  decodeSecureText,
+  createGitCryptoFs,
   createSecureBuffer,
-  createGitCryptoFs
+  decodeSecureText,
+  encodeSecureText,
+  importMasterKey
 } from "../src/core.js";
 
 vi.mock("./plugin.js", () => ({
@@ -80,9 +80,7 @@ describe("gitFsAdapter tests", () => {
    */
   test("Transparently decrypts loose Git objects on readFile", async () => {
     const cryptoFs = createGitCryptoFs(mockFs, masterKey);
-    const encryptedBlob = createRawGitBlob("ENCRYPTED_my-git-data");
-
-    mockFs.files[gitObjectPath] = encryptedBlob;
+    mockFs.files[gitObjectPath] = createRawGitBlob("ENCRYPTED_my-git-data");
 
     const result = await cryptoFs.readFile(gitObjectPath);
     const decompressed = pako.inflate(result);
@@ -101,7 +99,6 @@ describe("gitFsAdapter tests", () => {
 
     await cryptoFs.writeFile(regularFilePath, regularContent);
 
-    // Данные должны сохраниться один к одному без сжатия pako и шифрования
     expect(mockFs.files[regularFilePath]).toStrictEqual(regularContent);
 
     const readResult = await cryptoFs.readFile(regularFilePath);
