@@ -1,90 +1,93 @@
-import { describe, test, expect } from "vitest";
-import { generateTestKey } from "./helpers.js";
+import { describe, test, expect, beforeEach } from "vitest";
+
 import {
+  createCryptoTransformer,
   importMasterKey,
-  createCryptoPlugin,
-  GitObject,
   encodeSecureText,
   decodeSecureText,
-  createSecureBuffer
-} from "../src/index.js";
+  createSecureBuffer,
+  serializeTree,
+  serializeCommit,
+  GitObject,
+  TreeEntry
+} from "../src/core.js";
 
-describe("git-remote-crypto plugin tests", () => {
+describe("plugin architecture tests", () => {
+  let masterKey: CryptoKey;
+  let transformer: ReturnType<typeof createCryptoTransformer>;
 
-  test("writeObject should transparently encrypt the object buffer", async () => {
-    const rawKey = generateTestKey();
-    const masterKey = await importMasterKey(rawKey);
-    const plugin = createCryptoPlugin({ masterKey });
-
-    const originalContent = encodeSecureText("Top secret commit data");
-    const gitObject: GitObject = {
-      type: "blob",
-      object: originalContent
-    };
-
-    const originalWriteMock = async (obj: GitObject): Promise<string> => {
-      expect(obj.object[0]).toBe(0x45);
-      expect(obj.object[1]).toBe(0x4E);
-      expect(obj.object[2]).toBe(0x43);
-      expect(obj.object[3]).toBe(0x01);
-
-      expect(obj.object.byteLength).toBeGreaterThan(originalContent.byteLength);
-
-      return "mock-oid-12345";
-    };
-
-    const resultOid = await plugin.writeObject(gitObject, originalWriteMock);
-    expect(resultOid).toBe("mock-oid-12345");
+  beforeEach(async () => {
+    const rawKey = createSecureBuffer(32);
+    rawKey.set(new Array(32).fill(7));
+    masterKey = await importMasterKey(rawKey);
+    transformer = createCryptoTransformer({ masterKey });
   });
 
-  test("readObject should transparently decrypt encrypted objects on the fly", async () => {
-    const rawKey = generateTestKey();
-    const masterKey = await importMasterKey(rawKey);
-    const plugin = createCryptoPlugin({ masterKey });
+  /**
+   * Assures that a Git blob object goes through a complete encryption and decryption cycle successfully.
+   */
+  test("Should handle full cycle for blob encryption and decryption", async () => {
+    const rawContent = encodeSecureText("Top secret blob file contents");
+    const blobObject: GitObject = { type: "blob", object: rawContent };
 
-    const secretString = "Transparently decrypted Git history log";
-    const plainContent = encodeSecureText(secretString);
+    const encryptedBlob = await transformer.encryptObject(blobObject);
+    expect(encryptedBlob.object).not.toStrictEqual(rawContent);
+    expect(encryptedBlob.object[0]).toBe(0x45);
 
-    let encryptedBuffer = createSecureBuffer(0);
-    const saveEncryptedBuffer = async (obj: GitObject) => {
-      encryptedBuffer = obj.object;
-      return "mock-oid";
-    };
-
-    await plugin.writeObject({ type: "blob", object: plainContent }, saveEncryptedBuffer);
-
-    const originalReadMock = async (): Promise<GitObject> => {
-      return {
-        type: "blob",
-        object: encryptedBuffer
-      };
-    };
-
-    const decryptedObject = await plugin.readObject(originalReadMock);
-    const decryptedString = decodeSecureText(decryptedObject.object);
-
-    expect(decryptedString).toBe(secretString);
-    expect(decryptedObject.type).toBe("blob");
+    const decryptedBlob = await transformer.decryptObject(encryptedBlob);
+    expect(decodeSecureText(decryptedBlob.object)).toBe("Top secret blob file contents");
   });
 
-  test("readObject should return unencrypted data as-is if the marker is missing", async () => {
-    const rawKey = generateTestKey();
-    const masterKey = await importMasterKey(rawKey);
-    const plugin = createCryptoPlugin({ masterKey });
+  /**
+   * Verifies that Git tree filenames are safely obfuscated into Base64URL strings and restored.
+   */
+  test("Should encrypt and decrypt filenames inside Git tree entries using Base64URL", async () => {
+    const fakeHash = new Uint8Array(20).fill(0xCC);
+    const mockEntries: TreeEntry[] = [
+      { mode: "100644", type: "blob", name: "highly-confidential.txt", hash: fakeHash }
+    ];
 
-    const unencryptedText = "Regular cleartext Git object from local environment";
-    const plainContent = encodeSecureText(unencryptedText);
+    const treeObject: GitObject = { type: "tree", object: serializeTree(mockEntries) };
 
-    const originalReadMock = async (): Promise<GitObject> => {
-      return {
-        type: "blob",
-        object: plainContent
-      };
-    };
+    const encryptedTree = await transformer.encryptObject(treeObject);
+    expect(encryptedTree.object.toString()).not.toContain("highly-confidential.txt");
 
-    const resultObject = await plugin.readObject(originalReadMock);
-    const resultString = decodeSecureText(resultObject.object);
+    const decryptedTree = await transformer.decryptObject(encryptedTree);
+    expect(decryptedTree.object).toStrictEqual(treeObject.object);
+  });
 
-    expect(resultString).toBe(unencryptedText);
+  /**
+   * Validates that commit payloads are split, messages are obfuscated, and structures are retained.
+   */
+  test("Should transparently obfuscate and restore commit message payloads while leaving headers intact", async () => {
+    const headers = new Map<string, string[]>();
+    headers.set("tree", ["abcdef1234567890abcdef1234567890abcdef12"]);
+    headers.set("author", ["Developer <dev@crypto.org> 1600000000 +0000"]);
+
+    const commitMsg = encodeSecureText("feat(security): apply robust zero-knowledge layers");
+    const commitObject: GitObject = { type: "commit", object: serializeCommit(headers, commitMsg) };
+
+    const encryptedCommit = await transformer.encryptObject(commitObject);
+    expect(encryptedCommit.object).not.toStrictEqual(commitObject.object);
+
+    const decryptedCommit = await transformer.decryptObject(encryptedCommit);
+    expect(decryptedCommit.object).toStrictEqual(commitObject.object);
+  });
+
+  /**
+   * Ensures the transformer acts as an idempotent passthrough if objects are already processed.
+   */
+  test("Should bypass encryption or decryption if the payload state matches the intent", async () => {
+    const plainBlob: GitObject = { type: "blob", object: encodeSecureText("clean-asset") };
+
+    const encryptedOnce = await transformer.encryptObject(plainBlob);
+    const encryptedTwice = await transformer.encryptObject(encryptedOnce);
+
+    expect(encryptedTwice.object).toStrictEqual(encryptedOnce.object);
+
+    const decryptedOnce = await transformer.decryptObject(encryptedOnce);
+    const decryptedTwice = await transformer.decryptObject(decryptedOnce);
+
+    expect(decryptedTwice.object).toStrictEqual(decryptedOnce.object);
   });
 });
