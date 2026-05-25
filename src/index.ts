@@ -15,6 +15,7 @@ export interface CryptoGitManager<P extends RepoProfile | BrowserRepoProfile> {
   getProfile(name: string): P | undefined;
   init(name: string): Promise<void>;
   clone(name: string, options?: { ref?: string; depth?: number }): Promise<void>;
+  add(name: string, filepath: string | string[]): Promise<void>; // <-- Добавлен метод в интерфейс
   pull(name: string): Promise<void>;
   push(name: string, remote?: string): Promise<void>;
   commit(name: string, message: string, author?: { name: string; email: string }): Promise<string>;
@@ -76,6 +77,17 @@ export function createCryptoGitContext<P extends RepoProfile | BrowserRepoProfil
         ref: options?.ref ?? profile.ref,
         depth: options?.depth,
       });
+    },
+    async add(name, filepath) {
+      const { profile, cryptoFs } = getProfileContext(name);
+
+      if (Array.isArray(filepath)) {
+        for (const file of filepath) {
+          await git.add({ fs: cryptoFs, dir: profile.dir, filepath: file });
+        }
+      } else {
+        await git.add({ fs: cryptoFs, dir: profile.dir, filepath });
+      }
     },
     async pull(name) {
       const { profile, cryptoFs } = getProfileContext(name);

@@ -8,6 +8,7 @@ vi.mock("isomorphic-git", () => ({
     init: vi.fn(),
     setConfig: vi.fn(),
     clone: vi.fn(),
+    add: vi.fn(),
     pull: vi.fn(),
     push: vi.fn(),
     commit: vi.fn().mockResolvedValue("mock_commit_sha_12345"),
@@ -152,5 +153,32 @@ describe("CryptoGitContext Facade Integration Tests", () => {
   test("Should throw error at context initialization if httpClient is absent", () => {
     expect(() => createCryptoGitContext(null))
       .toThrow("HTTP client adapter is required (isomorphic-git/http/node or /http/web)");
+  });
+
+  /**
+   * Assures that staging files via add method supports both single string path and array lists.
+   */
+  test("Should bridge single string or multiple filepaths to git.add staging invocations", async () => {
+    const manager = createCryptoGitContext(mockHttpClient);
+    manager.addProfile(testProfile);
+
+    await manager.add("secure-team-repo", "src/index.ts");
+    expect(git.add).toStrictEqual({
+      fs: expect.any(Object),
+      dir: testProfile.dir,
+      filepath: "src/index.ts"
+    });
+
+    await manager.add("secure-team-repo", ["package.json", "README.md"]);
+    expect(git.add).toStrictEqual({
+      fs: expect.any(Object),
+      dir: testProfile.dir,
+      filepath: "package.json"
+    });
+    expect(git.add).toStrictEqual({
+      fs: expect.any(Object),
+      dir: testProfile.dir,
+      filepath: "README.md"
+    });
   });
 });

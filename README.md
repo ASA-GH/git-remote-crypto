@@ -81,6 +81,11 @@ gitManager.addProfile({
 await gitManager.init("secure-backend-repo");
 
 /**
+ * Stage a single file or multiple changed files into the Git index.
+ */
+await gitManager.add("secure-backend-repo", ["src/index.ts", "config.json"]);
+
+/**
  * Create transparently encrypted commits seamlessly.
  * @type {string}
  */
@@ -93,7 +98,7 @@ const commitSha = await gitManager.commit(
 /**
  * Sync securely to remote server streams.
  */
-await webGitManager.push("secure-backend-repo");
+await gitManager.push("secure-backend-repo");
 ```
 
 ### Variant B: Modern Browsers (Vite / Webpack / React / Vue / Obsidian Plugins)
@@ -136,6 +141,17 @@ await webGitManager.clone("secure-browser-vault");
  * Pull down encrypted changes down to clean decrypted local layouts.
  */
 await webGitManager.pull("secure-browser-vault");
+
+/**
+ * Stage modifications inside the browser virtual filesystem environment.
+ */
+await webGitManager.add("secure-browser-vault", "notes/secret-note.md");
+
+/**
+ * Commit local virtual data frames safely.
+ * @type {string}
+ */
+await webGitManager.commit("secure-browser-vault", "docs: update browser notes");
 ```
 
 ---
@@ -153,6 +169,7 @@ Constructs a unified storage interface abstraction.
 - `getProfile(name)`: Queries internal dictionary lookups to extract working parameter structures.
 - `init(name)`: Sets up a fresh Git space, writing custom configuration flags (`core.encrypted = true`).
 - `clone(name, options?)`: Synchronizes complete remote tracks, enforcing on-the-fly encryption constraints across disk payloads.
+- `add(name, filepath)`: Stages a single file path or an array of files into the Git index using the transparently encrypted proxy filesystem layer.
 - `pull(name)`: Pulls down remote encrypted frames, inflating and restoring transparent plaintext objects locally.
 - `push(name, remote?)`: Bundles deterministic local loose structures onto remote servers.
 - `commit(name, message, author?)`: Assembles native structural trees and messages, outputting encrypted metadata directly onto active storage targets.
