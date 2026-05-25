@@ -35,7 +35,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "build:watch": "tsc -p tsconfig.build.json --watch",
-    "dev": "tsx test/prototype.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "prepublishOnly": "npm run build && npm run test:run"
