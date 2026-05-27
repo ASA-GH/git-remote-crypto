@@ -15,7 +15,8 @@
     "resolveJsonModule": true,
     "paths": {
       "git-remote-crypto": ["./src/index.ts"],
-      "git-remote-crypto/core": ["./src/core.ts"]
+      "git-remote-crypto/core": ["./src/core.ts"],
+      "git-remote-crypto/transport/ssh": ["./src/transport/ssh.ts"]
     }
   },
   "include": ["src/**/*", "test/**/*"],
