@@ -1,4 +1,4 @@
-import type { FsClient } from 'isomorphic-git';
+import type { FsClient } from "isomorphic-git";
 
 /**
  * Strict binary array ensuring the use of a standard ArrayBuffer.
@@ -39,9 +39,21 @@ export interface RepoProfile {
 /**
  * Configuration profile for browser environments using a virtual file system client.
  */
-export interface BrowserRepoProfile extends Omit<RepoProfile, 'dir'> {
+export interface BrowserRepoProfile extends Omit<RepoProfile, "dir"> {
   fs: FsClient;
   dir: string;
+}
+
+/**
+ * Configuration profile for secure Git operations over SSH in Node.js or Electron environments.
+ */
+export interface SshRepoProfile extends RepoProfile {
+  /** The raw OpenSSH private key contents as a string. */
+  privateKey: string;
+  /** Optional passphrase if the private key is encrypted. */
+  passphrase?: string;
+  /** Optional custom port for the SSH connection (defaults to 22). */
+  port?: number;
 }
 
 /**
@@ -51,7 +63,7 @@ export interface TreeEntry {
   /** The file mode, e.g., "100644" for files or "40000" for subdirectories. */
   mode: string;
   /** The type of the object pointed to by this entry. */
-  type: 'blob' | 'tree';
+  type: "blob" | "tree";
   /** The raw 20-byte SHA-1 hash of the target object. */
   hash: Uint8Array;
   /** The filename or directory name. */

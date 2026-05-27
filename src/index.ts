@@ -1,21 +1,21 @@
 import git from "isomorphic-git";
-import { RepoProfile, BrowserRepoProfile, SecureBinaryData } from "./types.js";
+import { RepoProfile, BrowserRepoProfile, SecureBinaryData, SshRepoProfile } from "./types.js";
 import { createGitCryptoFs } from "./gitFsAdapter.js";
 
 export { importMasterKey } from "./crypto.js";
-export type { RepoProfile, BrowserRepoProfile, SecureBinaryData };
+export type { RepoProfile, BrowserRepoProfile, SecureBinaryData, SshRepoProfile };
 
 /**
  * Universal repository orchestrator capable of managing zero-knowledge encrypted Git workflows
  * across Node.js, Electron, and modern web browser environments.
  */
-export interface CryptoGitManager<P extends RepoProfile | BrowserRepoProfile> {
+export interface CryptoGitManager<P extends RepoProfile | BrowserRepoProfile | SshRepoProfile> {
   addProfile(profile: P): void;
   removeProfile(name: string): void;
   getProfile(name: string): P | undefined;
   init(name: string): Promise<void>;
   clone(name: string, options?: { ref?: string; depth?: number }): Promise<void>;
-  add(name: string, filepath: string | string[]): Promise<void>; // <-- Добавлен метод в интерфейс
+  add(name: string, filepath: string | string[]): Promise<void>;
   pull(name: string): Promise<void>;
   push(name: string, remote?: string): Promise<void>;
   commit(name: string, message: string, author?: { name: string; email: string }): Promise<string>;
@@ -30,7 +30,7 @@ export interface CryptoGitManager<P extends RepoProfile | BrowserRepoProfile> {
  * @returns An initialized manager runtime instances supporting strict profile lookups.
  * @throws {Error} If the provided network interface driver client is missing.
  */
-export function createCryptoGitContext<P extends RepoProfile | BrowserRepoProfile>(
+export function createCryptoGitContext<P extends RepoProfile | BrowserRepoProfile | SshRepoProfile>(
   httpClient: any,
   defaultFs?: any
 ): CryptoGitManager<P> {
@@ -48,8 +48,9 @@ export function createCryptoGitContext<P extends RepoProfile | BrowserRepoProfil
     if (!baseFs) throw new Error(`No filesystem client found for profile "${name}"`);
 
     const cryptoFs = createGitCryptoFs(baseFs, profile.key);
+    const activeHttpClient = (profile as any).httpClient ?? httpClient;
 
-    return { profile, cryptoFs };
+    return { profile, cryptoFs, httpClient: activeHttpClient };
   };
 
   return {
@@ -68,10 +69,10 @@ export function createCryptoGitContext<P extends RepoProfile | BrowserRepoProfil
       await git.setConfig({ fs: cryptoFs, dir: profile.dir, path: "core.encrypted", value: "true" });
     },
     async clone(name, options) {
-      const { profile, cryptoFs } = getProfileContext(name);
+      const { profile, cryptoFs, httpClient: activeHttp } = getProfileContext(name);
       await git.clone({
         fs: cryptoFs,
-        http: httpClient,
+        http: activeHttp,
         dir: profile.dir,
         url: profile.url,
         ref: options?.ref ?? profile.ref,
@@ -90,20 +91,20 @@ export function createCryptoGitContext<P extends RepoProfile | BrowserRepoProfil
       }
     },
     async pull(name) {
-      const { profile, cryptoFs } = getProfileContext(name);
+      const { profile, cryptoFs, httpClient: activeHttp } = getProfileContext(name);
       await git.pull({
         fs: cryptoFs,
-        http: httpClient,
+        http: activeHttp,
         dir: profile.dir,
         ref: profile.ref ?? "main",
         singleBranch: true,
       });
     },
     async push(name, remote) {
-      const { profile, cryptoFs } = getProfileContext(name);
+      const { profile, cryptoFs, httpClient: activeHttp } = getProfileContext(name);
       await git.push({
         fs: cryptoFs,
-        http: httpClient,
+        http: activeHttp,
         dir: profile.dir,
         remote: remote ?? profile.remote ?? "origin",
         ref: profile.ref ?? "main",
