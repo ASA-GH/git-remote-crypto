@@ -21,6 +21,7 @@ export { createCryptoTransformer } from "./plugin.js";
 
 export type {
   SecureBinaryData,
+  SshRepoProfile,
   CryptoPluginOptions,
   GitObject,
   RepoProfile,
