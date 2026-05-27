@@ -1,8 +1,12 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import git from "isomorphic-git";
 import { createCryptoGitContext } from "../src/index.js";
-import { createSecureBuffer, importMasterKey, BrowserRepoProfile } from "../src/core.js";
+import { createSecureBuffer, importMasterKey, BrowserRepoProfile, SshRepoProfile } from "../src/core.js";
 
+/**
+ * Mock definition for the isomorphic-git core module.
+ * Bridges interceptable spy utilities onto low-level repository state transitions.
+ */
 vi.mock("isomorphic-git", () => ({
   default: {
     init: vi.fn(),
@@ -15,11 +19,56 @@ vi.mock("isomorphic-git", () => ({
   }
 }));
 
+/**
+ * Mock specification for the native Node.js ssh2 module.
+ * Simulates low-level SSH channel handshakes, multiplexed terminal stream allocations,
+ * and standard Smart-HTTP RPC command invocations to isolate network activities.
+ */
+vi.mock("ssh2", () => {
+  /**
+   * Mocked Duplex stream handling bidirectional git-upload-pack / git-receive-pack transfers.
+   */
+  const mockStream = {
+    write: vi.fn(),
+    end: vi.fn(),
+    on: vi.fn((event, cb) => {
+      if (event === "data") {
+        setTimeout(() => cb(Buffer.from("")), 10);
+      }
+      if (event === "close") {
+        setTimeout(cb, 20);
+      }
+      return mockStream;
+    }),
+    stderr: { on: vi.fn() }
+  };
+
+  /**
+   * Mocked SSH2 client context facilitating connection handshakes and command executions.
+   */
+  const mockClient = {
+    on: vi.fn((event, cb) => {
+      if (event === "ready") setTimeout(cb, 10);
+      return mockClient;
+    }),
+    exec: vi.fn((cmd, cb) => {
+      cb(null, mockStream);
+    }),
+    connect: vi.fn(),
+    end: vi.fn()
+  };
+
+  return {
+    Client: vi.fn(() => mockClient)
+  };
+});
+
 describe("CryptoGitContext Facade Integration Tests", () => {
   let masterKey: CryptoKey;
   let mockHttpClient: any;
   let mockBaseFs: any;
   let testProfile: BrowserRepoProfile;
+  let testSshProfile: SshRepoProfile;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -39,6 +88,17 @@ describe("CryptoGitContext Facade Integration Tests", () => {
       remote: "origin",
       key: masterKey,
       fs: mockBaseFs
+    };
+
+    testSshProfile = {
+      name: "secure-ssh-repo",
+      url: "git@github.com:ASA-GH/secure-vault.git",
+      dir: "/path/to/ssh-repo",
+      ref: "main",
+      remote: "origin",
+      key: masterKey,
+      fs: mockBaseFs,
+      privateKey: "-----BEGIN OPENSSH PRIVATE KEY-----\nMOCK...",
     };
   });
 
@@ -96,6 +156,32 @@ describe("CryptoGitContext Facade Integration Tests", () => {
       ref: testProfile.ref,
       depth: 1
     });
+  });
+
+  /**
+   * 🔥 NEW TEST: Verifies that custom SSH httpClient interceptors are prioritised over default fallback adapters.
+   */
+  test("Should prefer custom profile-level httpClient for SSH network operations", async () => {
+    const manager = createCryptoGitContext(mockHttpClient);
+
+    const mockSshHttpClient = { request: vi.fn().mockResolvedValue({ statusCode: 200, body: [] }) };
+    (testSshProfile as any).httpClient = mockSshHttpClient;
+
+    manager.addProfile(testSshProfile);
+
+    await manager.pull("secure-ssh-repo");
+
+    expect(git.pull).toHaveBeenCalledWith(
+      expect.objectContaining({
+        http: mockSshHttpClient,
+        dir: testSshProfile.dir
+      })
+    );
+    expect(git.pull).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        http: mockHttpClient
+      })
+    );
   });
 
   /**
