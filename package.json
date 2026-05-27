@@ -20,6 +20,11 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./transport/ssh": {
+      "types": "./dist/transport/ssh.d.ts",
+      "import": "./dist/transport/ssh.js",
+      "default": "./dist/transport/ssh.js"
+    },
     "./core": {
       "types": "./dist/core.d.ts",
       "import": "./dist/core.js",
@@ -44,14 +49,16 @@
   },
   "dependencies": {
     "@isomorphic-git/lightning-fs": "^4.6.2",
-    "pako": "^2.1.0"
+    "pako": "^2.1.0",
+    "ssh2": "^1.17.0"
   },
   "devDependencies": {
     "@types/node": "^25.9.0",
     "@types/pako": "^2.0.4",
     "tsx": "^4.22.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.6"
+    "vitest": "^4.1.6",
+    "@types/ssh2": "^1.15.5"
   },
   "peerDependencies": {
     "isomorphic-git": "^1.38.1"
