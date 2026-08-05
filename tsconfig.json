@@ -19,6 +19,6 @@
       "git-remote-crypto/transport/ssh": ["./src/transport/ssh.ts"]
     }
   },
-  "include": ["src/**/*", "test/**/*"],
+  "include": ["src/**/*", "__tests__/**/*"],
   "exclude": ["node_modules", "dist"]
 }
