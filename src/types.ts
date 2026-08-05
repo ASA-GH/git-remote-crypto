@@ -40,7 +40,7 @@ export interface RepoProfile {
  * Configuration profile for browser environments using a virtual file system client.
  */
 export interface BrowserRepoProfile extends Omit<RepoProfile, "dir"> {
-  fs: FsClient;
+  fs?: FsClient;
   dir: string;
 }
 
@@ -54,6 +54,25 @@ export interface SshRepoProfile extends RepoProfile {
   passphrase?: string;
   /** Optional custom port for the SSH connection (defaults to 22). */
   port?: number;
+}
+
+/**
+ * HTTP client interface compatible with isomorphic-git's smart-HTTP protocol.
+ * Used by clone, pull, push, and other network-bound Git operations.
+ */
+export interface HttpClient {
+  request: (request: {
+    url: string;
+    method?: string;
+    headers?: Record<string, string>;
+    body?: any;
+  }) => Promise<{
+    url: string;
+    method?: string;
+    headers?: Record<string, string>;
+    statusCode: number;
+    statusMessage: string;
+  }>;
 }
 
 /**

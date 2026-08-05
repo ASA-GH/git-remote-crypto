@@ -27,6 +27,7 @@ export type {
   RepoProfile,
   BrowserRepoProfile,
   TreeEntry,
+  HttpClient,
 } from "./types.js";
 
 export {
