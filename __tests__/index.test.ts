@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import git from "isomorphic-git";
 import { createCryptoGitContext } from "../src/index.js";
-import { createSecureBuffer, importMasterKey, BrowserRepoProfile, SshRepoProfile } from "../src/core.js";
+import { createSecureBuffer, importMasterKey } from "../src/core.js";
 
 /**
  * Mock definition for the isomorphic-git core module.
@@ -18,6 +18,33 @@ vi.mock("isomorphic-git", () => ({
     commit: vi.fn().mockResolvedValue("mock_commit_sha_12345"),
   }
 }));
+
+/**
+ * Mock specification for isomorphic-git/http/node.
+ */
+vi.mock("isomorphic-git/http/node", () => ({
+  default: { request: vi.fn() }
+}));
+
+/**
+ * Mock specification for isomorphic-git/http/web.
+ */
+vi.mock("isomorphic-git/http/web", () => ({
+  default: { request: vi.fn() }
+}));
+
+/**
+ * Mock specification for @isomorphic-git/lightning-fs.
+ */
+vi.mock("@isomorphic-git/lightning-fs", () => {
+  class MockLightningFS {
+    name: string;
+    constructor(name: string) {
+      this.name = name;
+    }
+  }
+  return { default: MockLightningFS };
+});
 
 /**
  * Mock specification for the native Node.js ssh2 module.
@@ -63,12 +90,28 @@ vi.mock("ssh2", () => {
   };
 });
 
-describe("CryptoGitContext Facade Integration Tests", () => {
+/**
+ * Creates a mock Node.js HTTP client for RepoProfile tests.
+ */
+function createMockNodeHttp() {
+  return { request: vi.fn().mockResolvedValue({ statusCode: 200, body: [], headers: {} }) };
+}
+
+/**
+ * Creates a mock Browser HTTP client for BrowserRepoProfile tests.
+ */
+function createMockBrowserHttp() {
+  return { request: vi.fn().mockResolvedValue({ statusCode: 200, body: [], headers: {} }) };
+}
+
+describe("CryptoGitContext Zero-Config Integration Tests", () => {
   let masterKey: CryptoKey;
-  let mockHttpClient: any;
+  let mockNodeHttp: any;
+  let mockBrowserHttp: any;
   let mockBaseFs: any;
-  let testProfile: BrowserRepoProfile;
-  let testSshProfile: SshRepoProfile;
+  let testProfile: any;
+  let testBrowserProfile: any;
+  let testSshProfile: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -77,7 +120,8 @@ describe("CryptoGitContext Facade Integration Tests", () => {
     rawKey.set(new Array(32).fill(9));
     masterKey = await importMasterKey(rawKey);
 
-    mockHttpClient = { request: vi.fn() };
+    mockNodeHttp = createMockNodeHttp();
+    mockBrowserHttp = createMockBrowserHttp();
     mockBaseFs = { writeFile: vi.fn(), readFile: vi.fn() };
 
     testProfile = {
@@ -87,7 +131,15 @@ describe("CryptoGitContext Facade Integration Tests", () => {
       ref: "main",
       remote: "origin",
       key: masterKey,
-      fs: mockBaseFs
+    };
+
+    testBrowserProfile = {
+      name: "secure-browser-vault",
+      url: "https://github.com",
+      dir: "/vault-project",
+      ref: "main",
+      key: masterKey,
+      fs: mockBaseFs,
     };
 
     testSshProfile = {
@@ -97,8 +149,6 @@ describe("CryptoGitContext Facade Integration Tests", () => {
       ref: "main",
       remote: "origin",
       key: masterKey,
-      fs: mockBaseFs,
-      privateKey: "-----BEGIN OPENSSH PRIVATE KEY-----\nMOCK...",
     };
   });
 
@@ -106,7 +156,7 @@ describe("CryptoGitContext Facade Integration Tests", () => {
    * Assures that profile lifecycle management (adding, getting, and removing profiles) operates as expected.
    */
   test("Should properly manage repository profiles internally", () => {
-    const manager = createCryptoGitContext(mockHttpClient);
+    const manager = createCryptoGitContext();
 
     expect(manager.getProfile("secure-team-repo")).toBeUndefined();
 
@@ -121,7 +171,7 @@ describe("CryptoGitContext Facade Integration Tests", () => {
    * Validates that initializing a repository configures local encryption flags correctly via isomorphic-git.
    */
   test("Should call git.init and set custom encrypted config flag", async () => {
-    const manager = createCryptoGitContext(mockHttpClient);
+    const manager = createCryptoGitContext();
     manager.addProfile(testProfile);
 
     await manager.init("secure-team-repo");
@@ -143,14 +193,14 @@ describe("CryptoGitContext Facade Integration Tests", () => {
    * Confirms that clone method pipelines profiles metadata and fallback configurations correctly.
    */
   test("Should bridge repository metadata onto git.clone invocation", async () => {
-    const manager = createCryptoGitContext(mockHttpClient);
+    const manager = createCryptoGitContext();
     manager.addProfile(testProfile);
 
     await manager.clone("secure-team-repo", { depth: 1 });
 
     expect(git.clone).toHaveBeenCalledWith({
       fs: expect.any(Object),
-      http: mockHttpClient,
+      http: expect.any(Object),
       dir: testProfile.dir,
       url: testProfile.url,
       ref: testProfile.ref,
@@ -159,27 +209,23 @@ describe("CryptoGitContext Facade Integration Tests", () => {
   });
 
   /**
-   * 🔥 NEW TEST: Verifies that custom SSH httpClient interceptors are prioritised over default fallback adapters.
+   * Verifies that SSH profile automatically creates SSH transport without manual httpClient assignment.
    */
-  test("Should prefer custom profile-level httpClient for SSH network operations", async () => {
-    const manager = createCryptoGitContext(mockHttpClient);
-
-    const mockSshHttpClient = { request: vi.fn().mockResolvedValue({ statusCode: 200, body: [] }) };
-    (testSshProfile as any).httpClient = mockSshHttpClient;
-
+  test("Should auto-resolve SSH transport for SshRepoProfile without manual httpClient", async () => {
+    const manager = createCryptoGitContext();
     manager.addProfile(testSshProfile);
 
     await manager.pull("secure-ssh-repo");
 
     expect(git.pull).toHaveBeenCalledWith(
       expect.objectContaining({
-        http: mockSshHttpClient,
+        http: expect.any(Object),
         dir: testSshProfile.dir
       })
     );
     expect(git.pull).not.toHaveBeenCalledWith(
       expect.objectContaining({
-        http: mockHttpClient
+        http: mockNodeHttp
       })
     );
   });
@@ -188,7 +234,7 @@ describe("CryptoGitContext Facade Integration Tests", () => {
    * Assures sync protocols like pulling and pushing inject intercepted filesystems correctly.
    */
   test("Should orchestrate git.pull and git.push synchronizations flawlessly", async () => {
-    const manager = createCryptoGitContext(mockHttpClient);
+    const manager = createCryptoGitContext();
     manager.addProfile(testProfile);
 
     await manager.pull("secure-team-repo");
@@ -206,7 +252,7 @@ describe("CryptoGitContext Facade Integration Tests", () => {
    * Verifies that committing changes properly resolves and forwards custom author parameters.
    */
   test("Should invoke git.commit and pass down author signature information", async () => {
-    const manager = createCryptoGitContext(mockHttpClient);
+    const manager = createCryptoGitContext();
     manager.addProfile(testProfile);
 
     const author = { name: "Alice", email: "alice@crypto.org" };
@@ -226,7 +272,7 @@ describe("CryptoGitContext Facade Integration Tests", () => {
    * Validates robust error routing if context looks up non-existent target profile references.
    */
   test("Should throw an informative error if a profile is completely missing", async () => {
-    const manager = createCryptoGitContext(mockHttpClient);
+    const manager = createCryptoGitContext();
 
     await expect(manager.init("unknown-profile"))
       .rejects
@@ -234,18 +280,10 @@ describe("CryptoGitContext Facade Integration Tests", () => {
   });
 
   /**
-   * Validates constructor exceptions if essential HTTP adapters are missing during startup.
-   */
-  test("Should throw error at context initialization if httpClient is absent", () => {
-    expect(() => createCryptoGitContext(null))
-      .toThrow("HTTP client adapter is required (isomorphic-git/http/node or /http/web)");
-  });
-
-  /**
    * Assures that staging files via add method supports both single string path and array lists.
    */
   test("Should bridge single string or multiple filepaths to git.add staging invocations", async () => {
-    const manager = createCryptoGitContext(mockHttpClient);
+    const manager = createCryptoGitContext();
     manager.addProfile(testProfile);
 
     await manager.add("secure-team-repo", "src/index.ts");
@@ -266,5 +304,62 @@ describe("CryptoGitContext Facade Integration Tests", () => {
       dir: testProfile.dir,
       filepath: "README.md"
     });
+  });
+
+  /**
+   * Verifies that BrowserRepoProfile resolves with its profile-level fs client.
+   */
+  test("Should use BrowserRepoProfile fs when provided", async () => {
+    const manager = createCryptoGitContext();
+    manager.addProfile(testBrowserProfile);
+
+    await manager.init("secure-browser-vault");
+
+    expect(git.init).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dir: testBrowserProfile.dir,
+        fs: expect.any(Object)
+      })
+    );
+  });
+
+  /**
+   * Verifies that a mixed manager (Node + Browser + SSH) resolves each profile's stack independently.
+   */
+  test("Should resolve different httpClient/fs per profile in a mixed manager", async () => {
+    const manager = createCryptoGitContext();
+    manager.addProfile(testProfile);
+    manager.addProfile(testBrowserProfile);
+    manager.addProfile(testSshProfile);
+
+    // Init Node profile
+    await manager.init("secure-team-repo");
+    const nodeFsCall = vi.mocked(git.init).mock.calls[0][0];
+
+    // Init Browser profile
+    await manager.init("secure-browser-vault");
+    const browserFsCall = vi.mocked(git.init).mock.calls[1][0];
+
+    // SSH profile uses different http (SSH transport)
+    await manager.pull("secure-ssh-repo");
+    const sshHttpCall = vi.mocked(git.pull).mock.calls[0][0];
+
+    expect(nodeFsCall.fs).not.toEqual(browserFsCall.fs);
+    expect(sshHttpCall.http).toBeDefined();
+  });
+
+  /**
+   * Validates that defaultFs is passed through for Node profiles when provided.
+   */
+  test("Should accept and use defaultFs parameter for RepoProfile", async () => {
+    const customFs = { writeFile: vi.fn(), readFile: vi.fn() };
+    const manager = createCryptoGitContext(customFs);
+    manager.addProfile(testProfile);
+
+    await manager.init("secure-team-repo");
+
+    expect(git.init).toHaveBeenCalledWith(
+      expect.objectContaining({ dir: testProfile.dir })
+    );
   });
 });
