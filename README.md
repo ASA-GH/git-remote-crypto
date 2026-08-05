@@ -13,6 +13,7 @@ By utilizing deterministic encryption schemas, identical input payloads consiste
 - 🌐 **Isomorphic Design**: Runs seamlessly across client-side environments, including Node.js (>=24.14.0), Electron runtimes, and modern Web Browsers.
 - 🔑 **Built-in Pure-JS SSH Transport**: Tunnels smart-HTTP Git RPC commands directly through a secure SSH session via Node/Electron without calling native system git or ssh binaries.
 - 🛡️ **In-Memory Hardening**: Cryptographic operations consume non-extractable Web Crypto `CryptoKey` identifiers inside an isolated, secure buffer system.
+- ⚙️ **Zero-Configuration Setup**: `createCryptoGitContext()` — no httpClient, no fs, no imports from `isomorphic-git`. Just import from `git-remote-crypto` and go.
 - 🧩 **Zero-Configuration Hooks**: Replaces complex pipeline setups by proxying the core filesystem layer directly within `isomorphic-git`.
 
 ---
@@ -55,14 +56,12 @@ const masterKey = await importMasterKey(rawKeyBytes);
 
 ```typescript
 import { createCryptoGitContext, RepoProfile } from "git-remote-crypto";
-import nodeFs from "fs";
-import nodeHttp from "isomorphic-git/http/node";
 
 /**
- * Initialize an orchestration context targeting Node runtime modules.
+ * Zero-config: auto-resolves isomorphic-git/http/node + fs.
  * @type {CryptoGitManager<RepoProfile>}
  */
-const gitManager = createCryptoGitContext<RepoProfile>(nodeHttp, nodeFs);
+const gitManager = createCryptoGitContext<RepoProfile>();
 
 /**
  * Map a secure execution profile configuration.
@@ -106,31 +105,23 @@ await gitManager.push("secure-backend-repo");
 
 ```typescript
 import { createCryptoGitContext, BrowserRepoProfile } from "git-remote-crypto";
-import browserHttp from "isomorphic-git/http/web";
-import LightningFS from "@isomorphic-git/lightning-fs";
 
 /**
- * Initialize your preferred client-side virtual filesystem block.
- * @type {LightningFS}
- */
-const fsClient = new LightningFS("git-indexeddb-storage");
-
-/**
- * Instantiates a web-focused interface instance.
+ * Zero-config: auto-resolves isomorphic-git/http/web + LightningFS("git-remote-crypto").
+ * Override fs in profile to customize the IndexedDB name.
  * @type {CryptoGitManager<BrowserRepoProfile>}
  */
-const webGitManager = createCryptoGitContext<BrowserRepoProfile>(browserHttp);
+const webGitManager = createCryptoGitContext<BrowserRepoProfile>();
 
 /**
- * Attach a browser repository target configuration mapping its unique FS instance.
+ * Attach a browser repository target — LightningFS auto-created if fs not provided.
  */
 webGitManager.addProfile({
   name: "secure-browser-vault",
   url: "https://github.com",
   dir: "/vault-project",
   ref: "main",
-  key: masterKey,
-  fs: fsClient
+  key: masterKey
 });
 
 /**
@@ -161,14 +152,11 @@ To execute secure network synchronization routines via pure JavaScript SSH tunne
 
 ```typescript
 import { createCryptoGitContext, SshRepoProfile } from "git-remote-crypto";
-import { createSshHttpClient } from "git-remote-crypto/transport/ssh";
-import nodeFs from "fs";
-import nodeHttp from "isomorphic-git/http/node";
 
 /**
- * Instantiates a baseline Node execution manager.
+ * Zero-config: SSH profile auto-creates transport via createSshHttpClient.
  */
-const gitManager = createCryptoGitContext<SshRepoProfile>(nodeHttp, nodeFs);
+const gitManager = createCryptoGitContext<SshRepoProfile>();
 
 /**
  * Map a native SSH repository profile definition.
@@ -184,11 +172,6 @@ const sshProfile: SshRepoProfile = {
   port: 22 // Optional custom port mapping override
 };
 
-/**
- * Inject the decoupled SSH client proxy agent into the target runtime profile wrapper.
- */
-(sshProfile as any).httpClient = createSshHttpClient(sshProfile);
-
 gitManager.addProfile(sshProfile);
 
 /**
@@ -202,10 +185,9 @@ await gitManager.push("secure-ssh-repo");
 
 ## API Reference
 
-### `createCryptoGitContext(httpClient, defaultFs?)`
-Constructs a unified storage interface abstraction.
-- `httpClient`: An active network module adapter (`isomorphic-git/http/node` or `isomorphic-git/http/web`).
-- `defaultFs`: Fallback server-side filesystem instance (e.g., Node's `fs`). Optional if using explicitly typed virtual environment profile maps.
+### `createCryptoGitContext(defaultFs?)`
+Constructs a zero-config cryptographic Git manager. Auto-resolves `httpClient` and `fs` per-profile.
+- `defaultFs`: Fallback server-side filesystem instance (e.g., Node's `fs.promises`). Only used for `RepoProfile`/`SshRepoProfile` when not in a browser. Omitted for zero-config — auto-imports `fs`.
 
 ### `CryptoGitManager` Operations
 - `addProfile(profile)`: Enrolls a distinct encrypted profile block matrix lookup configuration (`RepoProfile | BrowserRepoProfile | SshRepoProfile`).
