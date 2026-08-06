@@ -37,9 +37,8 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=24.14.0"
+    "node": "^22.0.0 || ^24.0.0"
   },
-  "packageManager": "npm@11.9.0",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "build:watch": "tsc -p tsconfig.build.json --watch",
@@ -48,19 +47,16 @@
     "prepublishOnly": "npm run build && npm run test:run"
   },
   "dependencies": {
-    "@isomorphic-git/lightning-fs": "^4.6.2",
-    "pako": "^2.1.0",
+    "@isomorphic-git/lightning-fs": "^4.7.0",
+    "isomorphic-git": "^1.40.0",
+    "pako": "^3.0.1",
     "ssh2": "^1.17.0"
   },
   "devDependencies": {
-    "@types/node": "^25.9.0",
-    "@types/pako": "^2.0.4",
-    "tsx": "^4.22.1",
+    "@types/node": "^26.1.2",
+    "@types/ssh2": "^1.15.5",
+    "tsx": "^4.23.9",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.6",
-    "@types/ssh2": "^1.15.5"
-  },
-  "peerDependencies": {
-    "isomorphic-git": "^1.38.1"
+    "vitest": "^4.1.10"
   }
 }
