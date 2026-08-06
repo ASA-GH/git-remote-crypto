@@ -1,227 +1,217 @@
 # git-remote-crypto
 
-`git-remote-crypto` is a high-performance, universal zero-knowledge client-side encryption wrapper built on top of `isomorphic-git`. It intercepts raw Git loose objects at the input/output (I/O) layer, executing transparent encryption and decryption **on the fly** without altering Git's native history tracking capabilities or core mechanics.
+`git-remote-crypto` is a zero-knowledge encryption layer built on top of [`isomorphic-git`](https://isomorphic-git.org/). It intercepts Git operations at the filesystem level, transparently encrypting and decrypting objects on the fly — without altering Git's native history, hash mechanics, or branch tracking.
 
-By utilizing deterministic encryption schemas, identical input payloads consistently map to the identical ciphertexts. This design guarantees complete Git hash stability, allowing standard delta compression, repository merges, and branch tracking to work smoothly while ensuring your data remains completely encrypted on remote servers (e.g., GitHub, GitLab).
+**How it works:** you call `isomorphic-git` operations through `git-remote-crypto`'s manager. We proxy the filesystem layer, intercept writes to `.git/objects/`, and encrypt/decrypt each object before it hits disk. Your Git history stays identical — same hashes, same merges — but the content is always encrypted at rest.
+
+By using deterministic AES-256-GCM encryption (IV derived from HMAC of content), identical inputs always produce identical ciphertexts. This preserves Git hash stability and prevents tree drift during merges.
 
 ---
 
 ## Features
 
-- 🔒 **Zero-Knowledge Architecture**: Encryption and decryption happen exclusively in client memory. Raw master keys never touch network interfaces or remote servers.
-- ⚡ **Git Hash Stability**: Deterministic AES-GCM encryption ensures identical objects yield matching hashes, preventing tree drift and tracking anomalies.
-- 🌐 **Isomorphic Design**: Runs seamlessly across client-side environments, including Node.js (>=24.14.0), Electron runtimes, and modern Web Browsers.
-- 🔑 **Built-in Pure-JS SSH Transport**: Tunnels smart-HTTP Git RPC commands directly through a secure SSH session via Node/Electron without calling native system git or ssh binaries.
-- 🛡️ **In-Memory Hardening**: Cryptographic operations consume non-extractable Web Crypto `CryptoKey` identifiers inside an isolated, secure buffer system.
-- ⚙️ **Zero-Configuration Setup**: `createCryptoGitContext()` — no httpClient, no fs, no imports from `isomorphic-git`. Just import from `git-remote-crypto` and go.
-- 🧩 **Zero-Configuration Hooks**: Replaces complex pipeline setups by proxying the core filesystem layer directly within `isomorphic-git`.
+- 🔒 **Zero-Knowledge**: Encryption and decryption happen exclusively in client memory. Master keys never leave your machine.
+- ⚡ **Hash Stability**: Deterministic encryption means identical content → identical hashes. No tree drift on merges.
+- 🌐 **Universal Runtime**: Node.js (>=22.0.0), Electron, and modern browsers (Vite, Webpack, React, Vue, Obsidian plugins).
+- 🔑 **Built-in SSH Transport**: Pure-JS SSH tunneling for smart-HTTP Git — no native `git` or `ssh` binaries required.
+- ⚙️ **Zero-Config**: `createCryptoGitContext()` — no HTTP client setup, no filesystem wiring. Just import and go.
 
 ---
 
 ## Installation
 
-Install the package alongside its peer dependencies:
+Install the package — all dependencies are bundled:
 
 ```bash
 npm install git-remote-crypto
 ```
 
+### Dependencies
+
+| Dependency | Role | Runtime |
+|---|---|---|
+| `isomorphic-git` | Git operations engine | Node, Browser |
+| `ssh2` | SSH transport | Node, Electron |
+| `@isomorphic-git/lightning-fs` | Virtual browser filesystem | Browser only |
+| `pako` | gzip compression | All |
+
+No additional setup required. `git-remote-crypto` manages all transitive dependencies internally.
+
+---
+
+## Limitations
+
+- **Loose objects only**: Currently only encrypts/decrypts Git loose objects (`.git/objects/xx/yy`). Packfiles and Git LFS are not supported.
+- **Tag objects pass through**: `git tag` objects are not encrypted — only `blob`, `tree`, and `commit` types are processed.
+- **No Git LFS**: Large files managed via Git LFS are not intercepted.
+- **Browser storage limits**: `lightning-fs` uses IndexedDB, which has practical limits (~50-80% of disk space). Large repos may need manual storage management.
+- **Browser-only in main process**: `BrowserRepoProfile` with `lightning-fs` does not work in Electron's main process, Web Workers without IndexedDB support, or SSR environments (Next.js server-side rendering). Use `RepoProfile` for those.
+
+---
+
+## Security Warnings
+
+- **Lose your key, lose your data**: If you lose your master key, all encrypted content is permanently unrecoverable. There is no key recovery mechanism. Back up your master key securely.
+- **Key rotation is not yet supported**: Changing the master key requires re-encrypting all content manually. This is planned for a future release.
+- **Silent fallback on crypto errors**: If encryption or decryption fails internally, the original object is returned unchanged. This prevents crashes but means encrypted data could be read as plaintext (or vice versa) without explicit errors. This is a known issue being tracked for remediation.
+
 ---
 
 ## Initializing Keys
 
-The library exports `importMasterKey` to ingest secure binary inputs (like raw key views or key derivation outputs) and construct hardened cryptographic contexts.
+The library exports `importMasterKey` to ingest raw key bytes and construct a `CryptoKey`:
 
 ```typescript
 import { importMasterKey } from "git-remote-crypto";
 
-/**
- * Initialize a 32-byte secure key view array.
- * @type {Uint8Array}
- */
-const rawKeyBytes = new Uint8Array([/* 32 secret bytes */]);
-
-/**
- * Hardened master cryptographic context key.
- * @type {CryptoKey}
- */
+const rawKeyBytes = new Uint8Array(32); // 32 bytes = 256 bits
+crypto.getRandomValues(rawKeyBytes);
 const masterKey = await importMasterKey(rawKeyBytes);
+```
+
+Store `rawKeyBytes` securely. It is the only way to recover your data.
+
+---
+
+## Quick Start
+
+```typescript
+import { createCryptoGitContext } from "git-remote-crypto";
+
+const manager = createCryptoGitContext();
+
+manager.addProfile({
+  name: "my-repo",
+  url: "https://github.com/user/repo.git",
+  dir: "./my-local-repo",
+  key: masterKey,
+});
+
+await manager.init("my-repo");
+await manager.add("my-repo", "src/app.ts");
+await manager.commit("my-repo", "encrypt my work");
+await manager.push("my-repo");
 ```
 
 ---
 
 ## Usage Guide
 
-### Variant A: Node.js or Electron Runtime Execution (HTTPS)
+### Variant A: Node.js or Electron (HTTPS)
 
 ```typescript
-import { createCryptoGitContext, RepoProfile } from "git-remote-crypto";
+import { createCryptoGitContext } from "git-remote-crypto";
 
-/**
- * Zero-config: auto-resolves isomorphic-git/http/node + fs.
- * @type {CryptoGitManager<RepoProfile>}
- */
-const gitManager = createCryptoGitContext<RepoProfile>();
+const manager = createCryptoGitContext();
 
-/**
- * Map a secure execution profile configuration.
- */
-gitManager.addProfile({
-  name: "secure-backend-repo",
-  url: "https://github.com",
-  dir: "./my-local-secure-repo",
-  ref: "main",
-  remote: "origin",
-  key: masterKey
-});
-
-/**
- * Setup a clean local layout containing internal repository encryption locks.
- */
-await gitManager.init("secure-backend-repo");
-
-/**
- * Stage a single file or multiple changed files into the Git index.
- */
-await gitManager.add("secure-backend-repo", ["src/index.ts", "config.json"]);
-
-/**
- * Create transparently encrypted commits seamlessly.
- * @type {string}
- */
-const commitSha = await gitManager.commit(
-  "secure-backend-repo",
-  "feat: commit transparently encrypted at rest",
-  { name: "Developer", email: "dev@crypto.org" }
-);
-
-/**
- * Sync securely to remote server streams.
- */
-await gitManager.push("secure-backend-repo");
-```
-
-### Variant B: Modern Browsers (Vite / Webpack / React / Vue / Obsidian Mobile Plugins)
-
-```typescript
-import { createCryptoGitContext, BrowserRepoProfile } from "git-remote-crypto";
-
-/**
- * Zero-config: auto-resolves isomorphic-git/http/web + LightningFS("git-remote-crypto").
- * Override fs in profile to customize the IndexedDB name.
- * @type {CryptoGitManager<BrowserRepoProfile>}
- */
-const webGitManager = createCryptoGitContext<BrowserRepoProfile>();
-
-/**
- * Attach a browser repository target — LightningFS auto-created if fs not provided.
- */
-webGitManager.addProfile({
-  name: "secure-browser-vault",
-  url: "https://github.com",
-  dir: "/vault-project",
-  ref: "main",
-  key: masterKey
-});
-
-/**
- * Clone remote streams; payload encryption resolves transparently onto local writes.
- */
-await webGitManager.clone("secure-browser-vault");
-
-/**
- * Pull down encrypted changes down to clean decrypted local layouts.
- */
-await webGitManager.pull("secure-browser-vault");
-
-/**
- * Stage modifications inside the browser virtual filesystem environment.
- */
-await webGitManager.add("secure-browser-vault", "notes/secret-note.md");
-
-/**
- * Commit local virtual data frames safely.
- * @type {string}
- */
-await webGitManager.commit("secure-browser-vault", "docs: update browser notes");
-```
-
-### Variant C: Native SSH Transport (Node.js / Electron / Obsidian Desktop Plugins)
-
-To execute secure network synchronization routines via pure JavaScript SSH tunneling without requiring a local machine `git` installation or environment shell scripts:
-
-```typescript
-import { createCryptoGitContext, SshRepoProfile } from "git-remote-crypto";
-
-/**
- * Zero-config: SSH profile auto-creates transport via createSshHttpClient.
- */
-const gitManager = createCryptoGitContext<SshRepoProfile>();
-
-/**
- * Map a native SSH repository profile definition.
- */
-const sshProfile: SshRepoProfile = {
-  name: "secure-ssh-repo",
-  url: "git@github.com:username/encrypted-repo.git",
-  dir: "./my-local-secure-repo",
-  ref: "main",
+manager.addProfile({
+  name: "my-repo",
+  url: "https://github.com/user/repo.git",
+  dir: "./my-local-repo",
   key: masterKey,
-  privateKey: `-----BEGIN OPENSSH PRIVATE KEY-----\nMIIEogIBAAKCAQ...`, // The raw private key string
-  passphrase: "optional-key-passphrase",
-  port: 22 // Optional custom port mapping override
-};
+});
 
-gitManager.addProfile(sshProfile);
-
-/**
- * Network operations will seamlessly communicate via SSH transport layers.
- */
-await gitManager.pull("secure-ssh-repo");
-await gitManager.push("secure-ssh-repo");
+await manager.init("my-repo");
+await manager.add("my-repo", ["src/index.ts", "config.json"]);
+await manager.commit("my-repo", "feat: secure commit");
+await manager.push("my-repo");
 ```
+
+Auto-resolves `isomorphic-git/http/node` + Node `fs`.
+
+### Variant B: Browsers (Vite / Webpack / React / Vue / Obsidian)
+
+```typescript
+import { createCryptoGitContext } from "git-remote-crypto";
+
+const manager = createCryptoGitContext();
+
+manager.addProfile({
+  name: "my-vault",
+  url: "https://github.com/user/repo.git",
+  dir: "/vault",
+  key: masterKey,
+  // fs: customFs, // optional — LightningFS("git-remote-crypto") used by default
+});
+
+await manager.clone("my-vault");
+await manager.pull("my-vault");
+await manager.add("my-vault", "notes/secret.md");
+await manager.commit("my-vault", "update notes");
+```
+
+Auto-resolves `isomorphic-git/http/web` + `lightning-fs` (IndexedDB).
+
+### Variant C: SSH Transport (Node.js / Electron)
+
+```typescript
+import { createCryptoGitContext } from "git-remote-crypto";
+
+const manager = createCryptoGitContext();
+
+manager.addProfile({
+  name: "my-ssh-repo",
+  url: "git@github.com:user/encrypted-repo.git",
+  dir: "./my-local-repo",
+  key: masterKey,
+  privateKey: `-----BEGIN OPENSSH PRIVATE KEY-----\n...`,
+  passphrase: "optional", // omit if key has no passphrase
+  port: 22, // optional, default 22
+});
+
+await manager.pull("my-ssh-repo");
+await manager.push("my-ssh-repo");
+```
+
+Auto-creates SSH transport via `createSshHttpClient`. No manual HTTP client wiring.
 
 ---
 
 ## API Reference
 
-### `createCryptoGitContext(defaultFs?)`
-Constructs a zero-config cryptographic Git manager. Auto-resolves `httpClient` and `fs` per-profile.
-- `defaultFs`: Fallback server-side filesystem instance (e.g., Node's `fs.promises`). Only used for `RepoProfile`/`SshRepoProfile` when not in a browser. Omitted for zero-config — auto-imports `fs`.
+### `createCryptoGitContext()`
+
+Creates a zero-config manager. All dependencies are resolved internally via dynamic `import()`.
+
+### `CryptoGitManager.addProfile(profile)`
+
+Registers a repository profile. Accepts `RepoProfile`, `BrowserRepoProfile`, or `SshRepoProfile`. Multiple profiles of different types can coexist in a single manager.
 
 ### `CryptoGitManager` Operations
-- `addProfile(profile)`: Enrolls a distinct encrypted profile block matrix lookup configuration (`RepoProfile | BrowserRepoProfile | SshRepoProfile`).
-- `removeProfile(name)`: Erases a targeted identity configuration pattern from context cache memory.
-- `getProfile(name)`: Queries internal dictionary lookups to extract working parameter structures.
-- `init(name)`: Sets up a fresh Git space, writing custom configuration flags (`core.encrypted = true`).
-- `clone(name, options?)`: Synchronizes complete remote tracks, enforcing on-the-fly encryption constraints across disk payloads.
-- `add(name, filepath)`: Stages a single file path or an array of files into the Git index using the transparently encrypted proxy filesystem layer.
-- `pull(name)`: Pulls down remote encrypted frames, inflating and restoring transparent plaintext objects locally.
-- `push(name, remote?)`: Bundles deterministic local loose structures onto remote servers.
-- `commit(name, message, author?)`: Assembles native structural trees and messages, outputting encrypted metadata directly onto active storage targets.
+
+| Method | Description |
+|---|---|
+| `init(name)` | Initialize encrypted repo, sets `core.encrypted = true` |
+| `clone(name, options?)` | Clone remote with on-the-fly encryption |
+| `add(name, filepath)` | Stage file(s) for commit |
+| `pull(name)` | Pull latest, decrypt on read |
+| `push(name, remote?)` | Push, encrypt on write |
+| `commit(name, message, author?)` | Create encrypted commit |
+| `getProfile(name)` | Lookup registered profile |
+| `removeProfile(name)` | Unregister profile |
+
+### Subpath Exports
+
+```typescript
+// Cryptographic primitives and parsers
+import { encryptDeterministic, decryptWithMarker, parseTree, serializeTree, parseCommit, serializeCommit } from "git-remote-crypto/core";
+
+// SSH HTTP client (Node.js only)
+import { createSshHttpClient } from "git-remote-crypto/transport/ssh";
+```
 
 ---
 
-## Subpath Direct Module Consumption
+## Migration from Plain Git
 
-Advanced projects demanding decoupled cryptographic utilities, structural payload parsers, or discrete binary format serializers can access isolated subpaths directly:
+To encrypt an existing plain Git repository:
 
-```typescript
-import { 
-  encryptDeterministic, 
-  decryptWithMarker,
-  parseTree,
-  serializeTree,
-  parseCommit,
-  serializeCommit 
-} from "git-remote-crypto/core";
-```
-
-For setting up standalone network proxies or customized protocol translation brokers inside Node runtimes:
-
-```typescript
-import { createSshHttpClient } from "git-remote-crypto/transport/ssh";
-```
+1. **Backup** your repository and master key.
+2. Install `git-remote-crypto` and initialize the manager with your key.
+3. Run `git gc` to ensure all objects are loose (packfiles are not intercepted yet).
+4. Perform any operation (`add`, `commit`, `push`) — existing objects remain as-is, new objects get encrypted.
+5. Verify encrypted objects by checking `.git/objects/` — they should start with the `ENC\x01` marker.
+6. For full encryption of existing content, force a rewrite (e.g., amend commits, `git gc`) — this re-processes all objects through the encryption layer.
 
 ---
 
