@@ -57,10 +57,7 @@ async function resolveHttpClient(profile: AnyRepoProfile): Promise<HttpClient> {
   return mod.default as HttpClient;
 }
 
-async function resolveFs(
-  profile: AnyRepoProfile,
-  defaultFs: any
-): Promise<any> {
+async function resolveFs(profile: AnyRepoProfile): Promise<any> {
   // BrowserRepoProfile — use provided or create LightningFS
   if ("fs" in profile) {
     const browserFs = (profile as BrowserRepoProfile).fs;
@@ -71,32 +68,25 @@ async function resolveFs(
     return new (LightningFS as any)("git-remote-crypto");
   }
 
-  // RepoProfile / SshRepoProfile — use defaultFs or auto-import Node fs
-  if (defaultFs !== undefined) {
-    return defaultFs;
-  }
+  // RepoProfile / SshRepoProfile — auto-import Node fs
   const { default: nodeFs } = await import("node:fs");
   return nodeFs.promises;
 }
 
 /**
  * Instantiates a universal cryptographic Git client context.
- * Zero-config: auto-detects environment and resolves httpClient + fs per-profile.
+ * Zero-config: auto-resolves httpClient + fs per-profile.
  *
- * @param defaultFs - The default filesystem implementation (e.g., Node.js native `fs`).
- *                    Optional for browser profiles (uses LightningFS by default).
  * @returns An initialized manager supporting profile-based per-repo configuration.
  */
-export function createCryptoGitContext<P extends AnyRepoProfile>(
-  defaultFs?: any
-): CryptoGitManager<P> {
+export function createCryptoGitContext<P extends AnyRepoProfile>(): CryptoGitManager<P> {
   const profiles = new Map<string, P>();
 
   const getProfileContext = async (name: string): Promise<ProfileContext> => {
     const profile = profiles.get(name);
     if (!profile) throw new Error(`Profile "${name}" not found`);
 
-    const baseFs = await resolveFs(profile, defaultFs);
+    const baseFs = await resolveFs(profile);
     if (!baseFs) throw new Error(`No filesystem client found for profile "${name}"`);
 
     const cryptoFs = createGitCryptoFs(baseFs, profile.key);
