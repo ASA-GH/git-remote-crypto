@@ -35,7 +35,7 @@ src/
 ## Data Flow
 
 ```
-createCryptoGitContext(defaultFs?)
+createCryptoGitContext()
     │
     ├─→ profiles: Map<string, Profile>
     │
@@ -58,7 +58,7 @@ Each manager method resolves a profile by name via `getProfileContext(name)`, wh
 3. **baseFs** — resolved per-profile type:
    - `BrowserRepoProfile` with `fs` → use provided `fs`
    - `BrowserRepoProfile` without `fs` → dynamic `import("@isomorphic-git/lightning-fs")` → `new LightningFS("git-remote-crypto")`
-   - `RepoProfile` / `SshRepoProfile` → `defaultFs` parameter, or dynamic `import("fs")` → `fs.promises`
+   - `RepoProfile` / `SshRepoProfile` → dynamic `import("node:fs")` → `fs.promises`
 
 All are injected into isomorphic-git's API calls. The zero-config approach means consumers never import `isomorphic-git` or `fs` directly.
 
@@ -207,7 +207,7 @@ Used by clone, pull, push operations. Implemented by `isomorphic-git/http/node`,
 
 | Dependency | Role |
 |------------|------|
-| `isomorphic-git` (peer) | Underlying Git operations |
+| `isomorphic-git` | Underlying Git operations |
 | `ssh2` | Node.js SSH client for transport proxy |
 | `pako` | Gzip inflate/deflate for Git loose objects |
 | Web Crypto API (built-in) | HKDF, HMAC, AES-GCM — all cryptography |
