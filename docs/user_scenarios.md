@@ -198,10 +198,10 @@ manager.addProfile({ name, url, dir, key: masterKey, fs: new LightningFS("my-cus
 
 ## Scenario: Error — No Filesystem
 
-**Condition:** A `RepoProfile`/`SshRepoProfile` is used in an environment where neither `defaultFs` nor `fs.promises` is available.
+**Condition:** A `RepoProfile`/`SshRepoProfile` is used in an environment where `import("node:fs")` fails.
 
 1. `getProfileContext(name)` resolves baseFs via `resolveFs()`.
-2. For Node profiles with no `defaultFs`, attempts dynamic `import("fs")`.
+2. For Node profiles, attempts dynamic `import("node:fs")`.
 3. If the import fails or returns nothing, `baseFs` is falsy → throws `Error: No filesystem client found for profile "..."`.
 
 **Result:** Immediate error with clear message. Note: in Node.js environments this error should not occur since `fs` is a built-in module.
