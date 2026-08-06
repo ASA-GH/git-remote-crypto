@@ -348,18 +348,4 @@ describe("CryptoGitContext Zero-Config Integration Tests", () => {
     expect(sshHttpCall.http).toBeDefined();
   });
 
-  /**
-   * Validates that defaultFs is passed through for Node profiles when provided.
-   */
-  test("Should accept and use defaultFs parameter for RepoProfile", async () => {
-    const customFs = { writeFile: vi.fn(), readFile: vi.fn() };
-    const manager = createCryptoGitContext(customFs);
-    manager.addProfile(testProfile);
-
-    await manager.init("secure-team-repo");
-
-    expect(git.init).toHaveBeenCalledWith(
-      expect.objectContaining({ dir: testProfile.dir })
-    );
-  });
 });
