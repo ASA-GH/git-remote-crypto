@@ -1,7 +1,7 @@
 import { createCryptoTransformer } from "./plugin.js";
 import { GitObject } from "./types.js";
 import { decodeSecureText, encodeSecureText, toSBD } from "./utils.js";
-import pako from "pako";
+import { deflate, inflate } from "pako";
 
 /**
  * Creates a file system proxy wrapper that intercepts raw Git loose objects during read and write operations.
@@ -20,7 +20,7 @@ export function createGitCryptoFs(baseFs: any, masterKey: CryptoKey) {
    */
   async function processGitObject(buffer: Uint8Array, mode: "encrypt" | "decrypt"): Promise<Uint8Array> {
     try {
-      const decompressed = pako.inflate(buffer);
+    const decompressed = inflate(buffer);
 
       const nullIdx = decompressed.indexOf(0);
       if (nullIdx === -1) return buffer;
@@ -47,7 +47,7 @@ export function createGitCryptoFs(baseFs: any, masterKey: CryptoKey) {
       resultBuf.set(newHeaderBuf);
       resultBuf.set(transformed.object, newHeaderBuf.length);
 
-      return pako.deflate(resultBuf);
+      return deflate(resultBuf);
     } catch {
       return buffer;
     }

@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
-import pako from "pako";
+import { beforeEach, describe, expect, test } from "vitest";
+import { inflate, deflate } from "pako";
 import {
   createGitCryptoFs,
   createSecureBuffer,
@@ -23,7 +23,7 @@ describe("gitFsAdapter integration tests", () => {
     const fullObject = new Uint8Array(header.length + content.length);
     fullObject.set(header);
     fullObject.set(content, header.length);
-    return pako.deflate(fullObject);
+    return deflate(fullObject);
   }
 
   beforeEach(async () => {
@@ -53,7 +53,7 @@ describe("gitFsAdapter integration tests", () => {
     await cryptoFs.writeFile(gitObjectPath, originalBlob);
 
     const storedData = mockFs.files[gitObjectPath];
-    const decompressed = pako.inflate(storedData);
+    const decompressed = inflate(storedData);
 
     const nullIdx = decompressed.indexOf(0);
     const encryptedContent = decompressed.slice(nullIdx + 1);
@@ -74,7 +74,7 @@ describe("gitFsAdapter integration tests", () => {
     await cryptoFs.writeFile(gitObjectPath, originalBlob);
 
     const result = await cryptoFs.readFile(gitObjectPath);
-    const decompressed = pako.inflate(result);
+    const decompressed = inflate(result);
     const nullIdx = decompressed.indexOf(0);
     const content = decodeSecureText(decompressed.slice(nullIdx + 1));
 
